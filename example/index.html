@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Screen Recorder</title>
+  <style>
+    :root {
+      --bg: #f6f7f9; --card: #fff; --text: #15171a; --muted: #646a73; --border: #e3e6ea;
+      --accent: #e5484d; --accent-hover: #d13a40; --ok: #1a8f5a; --ok-bg: #e8f6ef;
+      --warn: #a35a00; --warn-bg: #fff4e5; --err: #c62f35; --err-bg: #fdecec;
+      --link: #1a73e8; --shadow: 0 1px 2px rgb(0 0 0 / .04), 0 8px 24px rgb(0 0 0 / .06);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f1113; --card: #181b1f; --text: #eceef1; --muted: #9aa1ab; --border: #2a2f35;
+        --accent: #ff5a5f; --accent-hover: #ff7276; --ok: #3ccf8e; --ok-bg: #11271d;
+        --warn: #ffb44d; --warn-bg: #2b2111; --err: #ff6b70; --err-bg: #2d1416;
+        --link: #8ab4f8; --shadow: 0 1px 2px rgb(0 0 0 / .3), 0 8px 24px rgb(0 0 0 / .35);
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+      font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    a { color: var(--link); }
+    [hidden] { display: none !important; }
+
+    header { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--card); flex-wrap: wrap; }
+    header h1 { font-size: 17px; margin: 0; display: flex; align-items: center; gap: 8px; }
+    header h1 .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+    .drive-chip { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; }
+    .drive-chip img { width: 26px; height: 26px; border-radius: 50%; }
+    .drive-chip .ok { color: var(--ok); font-weight: 600; }
+
+    main { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; display: grid; gap: 18px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 18px;
+      box-shadow: var(--shadow); padding: 24px; }
+    .center { text-align: center; }
+    h2 { font-size: 16px; margin: 0 0 12px; }
+
+    .record { width: 120px; height: 120px; border-radius: 50%; border: 6px solid var(--border);
+      background: var(--card); cursor: pointer; display: grid; place-items: center; margin: 4px auto 0;
+      transition: transform .15s ease, border-color .2s ease; }
+    .record:hover { transform: scale(1.03); }
+    .record:active { transform: scale(.97); }
+    .record:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+    .record:disabled { cursor: progress; opacity: .6; transform: none; }
+    .record .icon { width: 58px; height: 58px; background: var(--accent); border-radius: 50%;
+      transition: border-radius .2s ease, width .2s ease, height .2s ease; }
+    .record.on { border-color: color-mix(in srgb, var(--accent) 35%, transparent); animation: pulse 1.6s ease-in-out infinite; }
+    .record.on .icon { width: 40px; height: 40px; border-radius: 9px; }
+    @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 35%, transparent); } 50% { box-shadow: 0 0 0 14px transparent; } }
+    @media (prefers-reduced-motion: reduce) { .record.on { animation: none; } }
+    .label { margin-top: 12px; font-weight: 600; }
+    .timer { font: 600 28px/1.2 ui-monospace, "SF Mono", Menlo, monospace; font-variant-numeric: tabular-nums;
+      margin-top: 4px; color: var(--muted); }
+    .timer.live { color: var(--accent); }
+
+    .meters { margin: 16px auto 0; max-width: 300px; display: grid; gap: 8px; text-align: left; }
+    .meter { display: grid; grid-template-columns: 120px 1fr; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+    .bar { height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; }
+    .bar > span { display: block; height: 100%; width: 0; background: var(--ok); border-radius: 4px; transition: width .08s linear; }
+
+    .options { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; margin-top: 20px;
+      padding-top: 18px; border-top: 1px solid var(--border); }
+    .toggle { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
+    .toggle input { position: absolute; opacity: 0; pointer-events: none; }
+    .switch { width: 40px; height: 24px; border-radius: 12px; background: var(--border); position: relative; transition: background .2s; flex: none; }
+    .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%;
+      background: #fff; transition: transform .2s; box-shadow: 0 1px 2px rgb(0 0 0 / .2); }
+    .toggle input:checked + .switch { background: var(--ok); }
+    .toggle input:checked + .switch::after { transform: translateX(16px); }
+    .toggle input:focus-visible + .switch { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .toggle input:disabled + .switch { opacity: .5; }
+    .hint { margin: 12px 0 0; font-size: 13px; color: var(--muted); }
+
+    .notice { margin-top: 14px; padding: 10px 14px; border-radius: 10px; font-size: 14px; text-align: left; }
+    .notice.ok { background: var(--ok-bg); color: var(--ok); }
+    .notice.warn { background: var(--warn-bg); color: var(--warn); }
+    .notice.err { background: var(--err-bg); color: var(--err); }
+
+    video { width: 100%; border-radius: 12px; background: #000; display: block; aspect-ratio: 16 / 9; }
+    .meta { color: var(--muted); font-size: 13px; margin: 10px 0 14px; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .btn { appearance: none; border: 1px solid var(--border); background: var(--card); color: var(--text);
+      padding: 9px 15px; border-radius: 10px; font: inherit; font-weight: 600; cursor: pointer;
+      text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
+    .btn:hover { border-color: var(--muted); }
+    .btn:disabled { opacity: .55; cursor: not-allowed; }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn.primary:hover { background: var(--accent-hover); }
+    .btn.drive { background: var(--link); border-color: var(--link); color: #fff; }
+    .btn.small { padding: 6px 11px; font-size: 13px; }
+    .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .btn svg { width: 18px; height: 18px; }
+
+    .progress { margin-top: 14px; }
+    .progress .bar { height: 10px; }
+    .progress .bar > span { background: var(--link); transition: width .2s ease; }
+    .progress p { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+
+    .setup .sub-text { margin: 0 0 10px; font-size: 14px; color: var(--muted); }
+    .steps { margin: 0 0 16px; padding-left: 20px; display: grid; gap: 6px; font-size: 14px; }
+    .steps code, .setup code { font: 13px ui-monospace, Menlo, monospace; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; padding: 1px 6px; word-break: break-all; }
+    .copy-row { display: inline-flex; align-items: center; gap: 8px; margin-left: 4px; flex-wrap: wrap; }
+    .setup label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+    .setup .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .setup input { flex: 1 1 260px; min-width: 0; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border);
+      background: var(--bg); color: var(--text); font: inherit; }
+
+    .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+    .list li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 12px;
+      border: 1px solid var(--border); border-radius: 10px; flex-wrap: wrap; }
+    .list .name { font-weight: 600; word-break: break-all; }
+    .list .when { font-size: 12px; color: var(--muted); }
+    .empty { color: var(--muted); font-size: 14px; margin: 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><span class="dot" aria-hidden="true"></span>Screen Recorder</h1>
+    <div id="drive-out">
+      <button id="connect" class="btn drive small" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M7.7 3h8.6l5.4 9.4-4.3 7.6H6.6L2.3 12.4zm1.2 2L5 11.7h6.7L15.6 5zm8.3 1.1-3.9 6.8 3.9 6.7 3.8-6.7zM6.2 13.7l-1.6 2.9 1.9 3.4h7.3l-1.9-3.3-1.6-3z"/></svg>
+        Connect Google Drive
+      </button>
+    </div>
+    <div id="drive-in" class="drive-chip" hidden>
+      <img id="avatar" alt="" hidden />
+      <span><span class="ok">● Drive connected</span> · <span id="email"></span></span>
+      <button id="disconnect" class="btn small" type="button">Disconnect</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="setup" class="card setup" hidden aria-labelledby="setup-title">
+      <h2 id="setup-title">Set up Google Drive (one time, ~3 minutes)</h2>
+      <p class="sub-text">Google requires every app that saves to Drive to have its own <strong>Client ID</strong>. Your email address is not enough. Create one for free:</p>
+      <ol class="steps">
+        <li><a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">Create a Google Cloud project</a> (any name).</li>
+        <li><a href="https://console.cloud.google.com/apis/library/drive.googleapis.com" target="_blank" rel="noopener">Enable the Google Drive API</a> → click <strong>Enable</strong>.</li>
+        <li><a href="https://console.cloud.google.com/auth/overview" target="_blank" rel="noopener">Set up the consent screen</a> → External → fill app name + your email. Under <strong>Audience → Test users</strong>, add <strong id="your-email">your Gmail</strong>.</li>
+        <li><a href="https://console.cloud.google.com/apis/credentials/oauthclient" target="_blank" rel="noopener">Create an OAuth client ID</a> → type <strong>Web application</strong> → under <strong>Authorized JavaScript origins</strong> add:
+          <span class="copy-row"><code id="origin"></code><button id="copy-origin" class="btn small" type="button">Copy</button></span>
+        </li>
+        <li>Copy the <strong>Client ID</strong> it shows (ends in <code>.apps.googleusercontent.com</code>) and paste it below.</li>
+      </ol>
+      <label for="client-id">Client ID</label>
+      <div class="row">
+        <input id="client-id" type="text" placeholder="1234567890-abc123.apps.googleusercontent.com" autocomplete="off" spellcheck="false" aria-describedby="setup-error" />
+        <button id="save-client" class="btn drive" type="button">Save & connect</button>
+      </div>
+      <div id="setup-error" class="notice err" role="alert" hidden></div>
+    </section>
+
+    <section class="card center" aria-label="Recorder">
+      <button id="record" class="record" type="button" aria-label="Start recording">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <div id="label" class="label">Start recording</div>
+      <div id="timer" class="timer" role="timer">00:00</div>
+
+      <div id="meters" class="meters" hidden aria-label="Audio levels">
+        <div class="meter" id="m-microphone"><span>Microphone</span><div class="bar"><span></span></div></div>
+        <div class="meter" id="m-system"><span>Computer audio</span><div class="bar"><span></span></div></div>
+      </div>
+
+      <div class="options">
+        <label class="toggle"><input id="opt-camera" type="checkbox" checked /><span class="switch" aria-hidden="true"></span>Webcam bubble</label>
+        <label class="toggle"><input id="opt-mic" type="checkbox" checked /><span class="switch" aria-hidden="true"></span>Microphone</label>
+      </div>
+      <p class="hint">For computer sound on a Mac, share a <strong>Chrome Tab</strong> and turn on <strong>“Also share tab audio”</strong>.</p>
+      <div id="notice" class="notice" role="status" hidden></div>
+    </section>
+
+    <section id="result" class="card" hidden aria-labelledby="result-title">
+      <h2 id="result-title">Your recording</h2>
+      <video id="player" controls playsinline></video>
+      <div id="meta" class="meta"></div>
+      <div class="actions">
+        <button id="save-drive" class="btn drive" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M7.7 3h8.6l5.4 9.4-4.3 7.6H6.6L2.3 12.4zm1.2 2L5 11.7h6.7L15.6 5zm8.3 1.1-3.9 6.8 3.9 6.7 3.8-6.7zM6.2 13.7l-1.6 2.9 1.9 3.4h7.3l-1.9-3.3-1.6-3z"/></svg>
+          Save to Drive
+        </button>
+        <a id="download" class="btn" download>Download</a>
+        <button id="discard" class="btn" type="button">Discard</button>
+      </div>
+      <div id="progress" class="progress" hidden>
+        <div class="bar"><span></span></div>
+        <p id="progress-text">Uploading…</p>
+      </div>
+      <div id="saved" class="notice ok" hidden></div>
+    </section>
+
+    <section class="card" aria-labelledby="history-title">
+      <h2 id="history-title">Saved to Google Drive</h2>
+      <ul id="history" class="list"></ul>
+      <p id="history-empty" class="empty">Nothing saved yet. After a recording, click “Save to Drive”.</p>
+    </section>
+  </main>
+
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>
